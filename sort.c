@@ -173,30 +173,32 @@ int sort_paralelo(unsigned int *vetor, unsigned int tam, unsigned int ntasks, un
     // variáveis do loop
     int lower_bound = 0;
     int upper_bound = range - 1;
-    int vector_index = 0;  
+    int* auxiliar_vector = malloc(sizeof(int)*tam);
 
-    while (upper_bound < tam) {
+    for (int j = 0; j < ntasks; j++) {
         if (remainder) {
             upper_bound++;
             remainder--;
         }
-        task_vector_size[vector_index] = 0;
-        // task_vector[vector_index] = malloc(sizeof(int) * ???)
-        // implementar vetor dinâmico
+        task_vector_size[j] = 0;
         int element_index = 0;
         for (int i = 0; i < tam; i++) {
             if ((vetor[i] <= upper_bound) && (vetor[i] >= lower_bound)) {
-                task_vector_size[vector_index]++;
-                task_vector[vector_index][element_index] = vetor[i];
+                task_vector_size[j]++;
+                auxiliar_vector[element_index] = vetor[i];
                 element_index++;
             }
         } 
-        // controle
+        // alocação do subvetor
+        task_vector[j] = malloc(sizeof(int)*task_vector_size[j]);
+        for (int i = 0; i < task_vector_size[j]; i++) {
+            task_vector[j][i] = auxiliar_vector[i];
+        }
         lower_bound = upper_bound + 1;
         upper_bound = upper_bound + range;
-        vector_index++;
     }  
-
+    
+    free(auxiliar_vector);
     bubble_sort_args args[ntasks];
     thread_pool_t pool;
     thread_pool_init(&pool, nthreads, ntasks);
