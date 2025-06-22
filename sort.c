@@ -25,9 +25,18 @@ typedef struct {
     task_t* contents;
     pthread_mutex_t mutex;
     pthread_cond_t task_avaiable;
+    int is_active;
 } task_queue_t;
 
+typedef struct {
+    pthread_t* threads;
+    size_t num_threads;
+    task_queue_t task_queue;
+} thread_pool_t;
+
+
 int task_queue_init(task_queue_t* q, size_t size) {
+    q->is_active = 1;
     q->front = 0;
     q->rear = -1;
     q->count = 0u;
@@ -53,38 +62,35 @@ int task_enqueue(task_queue_t* q, void (*function)(void*), void* arg) {
     q->rear = (q->rear + 1) % q->size;
     q->contents[q->rear].function = function;
     q->contents[q->rear].arg = arg;
-    pthread_cond_signal(&q->task_avaiable);
+    q->count++;
+    pthread_cond_broadcast(&q->task_avaiable);
     pthread_mutex_unlock(&q->mutex);
     return 0;
 }
 
 task_t* task_dequeue(task_queue_t* q) {
     pthread_mutex_lock(&q->mutex);
-    while (q->count == 0u)
+    while (q->count == 0u && q->is_active)
         pthread_cond_wait(&q->task_avaiable, &q->mutex);
+    if (q->count == 0u && !q->is_active) return NULL;
     task_t* task = &q->contents[q->front];
     q->count--;
     q->front = (q->front + 1) % q->size;
-    pthread_cond_signal(&q->task_avaiable);
+    pthread_cond_broadcast(&q->task_avaiable);
     pthread_mutex_unlock(&q->mutex);
     return task;
 }
 
 void* pool_worker(void* args) {
-    task_queue_t* task_queue = (task_queue_t*) args;
+    thread_pool_t* pool = (thread_pool_t*) args;
 
     while (1) {
-        task_t* task = task_dequeue(task_queue);
+        task_t* task = task_dequeue(&pool->task_queue);
+        if (task == NULL) break;
         task->function(task->arg);
     }
+    pthread_exit(NULL);
 }
-
-typedef struct {
-    pthread_t* threads;
-    size_t num_threads;
-    task_queue_t task_queue;
-} thread_pool_t;
-
 
 void thread_pool_add_task(thread_pool_t* pool, void (*function)(void*), void* args) {
     task_enqueue(&pool->task_queue, function, args);
@@ -95,7 +101,7 @@ int thread_pool_init(thread_pool_t* pool, size_t nthreads, size_t q_size) {
     task_queue_init(&pool->task_queue, q_size);
 
     for (size_t i = 0u; i < nthreads; i++) {
-        if (pthread_create(&pool->threads[i], NULL, pool_worker, &pool->task_queue)) return 1;
+        if (pthread_create(&pool->threads[i], NULL, pool_worker, pool)) return 1;
     }
 
     pool->num_threads = nthreads;
@@ -103,6 +109,11 @@ int thread_pool_init(thread_pool_t* pool, size_t nthreads, size_t q_size) {
 }
 
 void thread_pool_destroy(thread_pool_t* pool) {
+    // desativa flag da fila
+    pool->task_queue.is_active = 0;
+    // acorda todas as threads
+    pthread_cond_broadcast(&pool->task_queue.task_avaiable);
+    // aguarda pela finalização das threads
     for (size_t i = 0u; i < pool->num_threads; i++) {
         pthread_join(pool->threads[i], NULL);
     }
@@ -210,14 +221,15 @@ int sort_paralelo(unsigned int *vetor, unsigned int tam, unsigned int ntasks, un
         thread_pool_add_task(&pool, bubble_sort_wrapper, &args[i]);
     }
 
-    // concatena subvetores
+    thread_pool_destroy(&pool);
+    
+        // concatena subvetores
     int pos = 0;
-    for (int i = 0; i < tam; i++) {
+    for (int i = 0; i < ntasks; i++) {
         for (int j = pos; j < task_vector_size[i]; j++)
             vetor[pos++] = task_vector[i][j];
     }
-
-    thread_pool_destroy(&pool);
+    
     free(task_vector_size);
     for (int i = 0; i < ntasks; i++)
         free(task_vector[i]);
