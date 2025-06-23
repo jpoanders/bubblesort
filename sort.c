@@ -20,8 +20,8 @@ typedef struct {
 typedef struct {
     int front;
     int rear;
-    size_t count;
-    size_t size;
+    unsigned int count;
+    unsigned int size;
     task_t* contents;
     pthread_mutex_t mutex;
     pthread_cond_t task_avaiable;
@@ -30,21 +30,24 @@ typedef struct {
 
 typedef struct {
     pthread_t* threads;
-    size_t num_threads;
+    unsigned int num_threads;
     task_queue_t task_queue;
 } thread_pool_t;
 
 
-int task_queue_init(task_queue_t* q, size_t size) {
+int task_queue_init(task_queue_t* q, unsigned int size) {
+    printf("iniciando fila");
     q->is_active = 1;
     q->front = 0;
     q->rear = -1;
     q->count = 0u;
     q->size = size;
-    size_t queue_size = (size) ? size : DEFAULT_QUEUE_SIZE;
+    unsigned int queue_size = (size) ? size : DEFAULT_QUEUE_SIZE;
     task_t* contents = malloc(sizeof(task_t)*queue_size);
     q->contents = contents;
+    printf("fila: vou tentar inicializar mutex");
     pthread_mutex_init(&q->mutex, NULL);
+    printf("fila: vou tentar inicializar cond");
     pthread_cond_init(&q->task_avaiable, NULL);
     return 0;
 }
@@ -56,15 +59,19 @@ void task_queue_destroy(task_queue_t* q) {
 }
 
 int task_enqueue(task_queue_t* q, void (*function)(void*), void* arg) {
+    printf("tentando adicionar task");
     pthread_mutex_lock(&q->mutex);
-    while (q->count == q->size)
+    while (q->count == q->size) {
+        printf("thread esperando para adicionar task");
         pthread_cond_wait(&q->task_avaiable, &q->mutex);
+    }
     q->rear = (q->rear + 1) % q->size;
     q->contents[q->rear].function = function;
     q->contents[q->rear].arg = arg;
     q->count++;
     pthread_cond_broadcast(&q->task_avaiable);
     pthread_mutex_unlock(&q->mutex);
+    printf("task adicionada");
     return 0;
 }
 
@@ -93,14 +100,19 @@ void* pool_worker(void* args) {
 }
 
 void thread_pool_add_task(thread_pool_t* pool, void (*function)(void*), void* args) {
+    printf("pool chamando task enqueue");
     task_enqueue(&pool->task_queue, function, args);
 }
 
-int thread_pool_init(thread_pool_t* pool, size_t nthreads, size_t q_size) {
+int thread_pool_init(thread_pool_t* pool, unsigned int nthreads, unsigned int q_size) {
+    sleep(2);
+    printf("iniciando pool");
+    sleep(2);
     pool->threads = malloc(sizeof(pthread_t)*nthreads);
+    printf("pool: vou tentar iniciar a fila");
     task_queue_init(&pool->task_queue, q_size);
 
-    for (size_t i = 0u; i < nthreads; i++) {
+    for (unsigned int i = 0u; i < nthreads; i++) {
         if (pthread_create(&pool->threads[i], NULL, pool_worker, pool)) return 1;
     }
 
@@ -111,10 +123,11 @@ int thread_pool_init(thread_pool_t* pool, size_t nthreads, size_t q_size) {
 void thread_pool_destroy(thread_pool_t* pool) {
     // desativa flag da fila
     pool->task_queue.is_active = 0;
+    printf("fila desativada");
     // acorda todas as threads
     pthread_cond_broadcast(&pool->task_queue.task_avaiable);
     // aguarda pela finalização das threads
-    for (size_t i = 0u; i < pool->num_threads; i++) {
+    for (unsigned int i = 0u; i < pool->num_threads; i++) {
         pthread_join(pool->threads[i], NULL);
     }
     free(pool->threads);
@@ -201,7 +214,8 @@ int sort_paralelo(unsigned int *vetor, unsigned int tam, unsigned int ntasks, un
             }
         } 
         // alocação do subvetor
-        task_vector[j] = malloc(sizeof(int)*task_vector_size[j]);
+        if (task_vector_size[j] == 0) task_vector[j] = NULL;
+        else task_vector[j] = malloc(sizeof(int)*task_vector_size[j]);
         for (int i = 0; i < task_vector_size[j]; i++) {
             task_vector[j][i] = auxiliar_vector[i];
         }
@@ -210,23 +224,38 @@ int sort_paralelo(unsigned int *vetor, unsigned int tam, unsigned int ntasks, un
     }  
     
     free(auxiliar_vector);
+    for (int i = 0; i < ntasks; i++) {
+        printf("imprimindo subvetor %d: ", i);
+        if (task_vector[i] == NULL) printf("tentando acessar vetor NULL");
+        imprime_vet((unsigned int *)task_vector[i], task_vector_size[i]);
+        printf("ok, impresso\n");
+        fflush(stdout);
+    }
+    sleep(1);
+    printf("saí do loop de impressão\n");
     bubble_sort_args args[ntasks];
     thread_pool_t pool;
+    printf("vou tentar inicializar a pool\n");
     thread_pool_init(&pool, nthreads, ntasks);
 
     // adiciona as tasks à pool
     for (int i = 0; i < ntasks; i++) {
         args[i].v = task_vector[i];
         args[i].size = task_vector_size[i];
+        printf("vou tentar adicionar task");
         thread_pool_add_task(&pool, bubble_sort_wrapper, &args[i]);
     }
 
     thread_pool_destroy(&pool);
+
+    for (int i = 0; i < ntasks; i++) {
+        imprime_vet((unsigned int *)task_vector[i], task_vector_size[i]);
+    }
     
         // concatena subvetores
     int pos = 0;
     for (int i = 0; i < ntasks; i++) {
-        for (int j = pos; j < task_vector_size[i]; j++)
+        for (int j = 0; j < task_vector_size[i]; j++)
             vetor[pos++] = task_vector[i][j];
     }
     
