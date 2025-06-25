@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h>
-#include <thread_pool.h>
+#include "thread_pool.h"
 
 int task_queue_init(task_queue_t* q, unsigned int size) {
     q->is_active = 1;

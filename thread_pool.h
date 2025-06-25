@@ -1,5 +1,6 @@
 #ifndef THREAD_POOL_H
 #define THREAD_POOL_H
+#include <pthread.h>
 #define DEFAULT_QUEUE_SIZE 16
 
 typedef struct {

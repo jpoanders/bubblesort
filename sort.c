@@ -8,6 +8,8 @@
 typedef struct {
     int* v;
     int size;
+    int* vector;
+    int lower_bound, upper_bound;
 } bubble_sort_args;
 
 // Funcao de ordenacao fornecida. Não pode alterar.
