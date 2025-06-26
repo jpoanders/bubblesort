@@ -3,7 +3,7 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <unistd.h>
-
+extern int fd[2];
 #define DEFAULT_QUEUE_SIZE 16
 
 typedef struct {
@@ -204,10 +204,7 @@ int sort_paralelo(unsigned int *vetor, unsigned int tam, unsigned int ntasks, un
     int* auxiliar_vector = malloc(sizeof(int)*tam);
 
     for (int j = 0; j < ntasks; j++) {
-        if (remainder) {
-            upper_bound++;
-            remainder--;
-        }
+        if (j < remainder) upper_bound++;
         task_vector_size[j] = 0;
         int element_index = 0;
         for (int i = 0; i < tam; i++) {
@@ -298,6 +295,9 @@ int main(int argc, char **argv) {
 
     // Imprime vetor ordenado
     imprime_vet(vetor, nnumbers);
+
+    // facilitar testes
+    write(fd[1], vetor, sizeof(int)*nnumbers);
 
     // Desaloca vetor
     free(vetor);
