@@ -106,10 +106,6 @@ void* pool_worker(void* args) {
     pthread_exit(NULL);
 }
 
-void thread_pool_add_task(thread_pool_t* pool, void (*function)(void*), void* args) {
-    task_enqueue(&pool->task_queue, function, args);
-}
-
 int thread_pool_init(thread_pool_t* pool, unsigned int nthreads, unsigned int q_size) {
     pool->threads = malloc(sizeof(pthread_t)*nthreads);
     task_queue_init(&pool->task_queue, q_size);
@@ -124,9 +120,10 @@ int thread_pool_init(thread_pool_t* pool, unsigned int nthreads, unsigned int q_
 
 void thread_pool_destroy(thread_pool_t* pool) {
     // desativa flag da fila
+    pthread_mutex_lock(&pool->task_queue.mutex);
     pool->task_queue.is_active = 0;
-    // acorda todas as threads
     pthread_cond_broadcast(&pool->task_queue.task_avaiable);
+    pthread_mutex_unlock(&pool->task_queue.mutex);
     // aguarda pela finalização das threads
     for (unsigned int i = 0u; i < pool->num_threads; i++) {
         pthread_join(pool->threads[i], NULL);
@@ -135,6 +132,10 @@ void thread_pool_destroy(thread_pool_t* pool) {
     }
     free(pool->threads);
     task_queue_destroy(&pool->task_queue);
+}
+
+void thread_pool_add_task(thread_pool_t* pool, void (*function)(void*), void* args) {
+    task_enqueue(&pool->task_queue, function, args);
 }
 
 // Funcao de ordenacao fornecida. Não pode alterar.
