@@ -48,8 +48,8 @@ task_t* task_dequeue(task_queue_t* q) {
     }
     if (q->count == 0u && !q->is_active) {
         pthread_cond_broadcast(&q->task_avaiable);
-        printf("thread retornou null.\n");
-        fflush(stdout);
+        // printf("thread retornou null.\n");
+        // fflush(stdout);
         pthread_mutex_unlock(&q->mutex);
         return NULL;
     } 
@@ -92,16 +92,16 @@ int thread_pool_init(thread_pool_t* pool, unsigned int nthreads, unsigned int q_
 }
 
 void thread_pool_destroy(thread_pool_t* pool) {
-    // desativa flag da fila
+    pthread_mutex_lock(&pool->task_queue.mutex);
     pool->task_queue.is_active = 0;
-    // acorda todas as threads
     pthread_cond_broadcast(&pool->task_queue.task_avaiable);
-    // aguarda pela finalização das threads
+    pthread_mutex_unlock(&pool->task_queue.mutex);
     for (unsigned int i = 0u; i < pool->num_threads; i++) {
         pthread_join(pool->threads[i], NULL);
-        printf("thread %d finalizou\n", i);
+        printf("Uma Thread finalizou\n");
         fflush(stdout);
     }
+    printf("Todas as Threads finalizaram\n");
     free(pool->threads);
     task_queue_destroy(&pool->task_queue);
 }
