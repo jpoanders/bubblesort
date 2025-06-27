@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include "merge_sort.h"
 
-static void merge(unsigned int* v, unsigned int* aux, unsigned int ini, unsigned int meio, unsigned int fim) {
+void merge(unsigned int* v, unsigned int* aux, unsigned int ini, unsigned int meio, unsigned int fim) {
     unsigned int i = ini;
     unsigned int j = meio;
     unsigned int k = ini;
@@ -22,7 +22,7 @@ static void merge(unsigned int* v, unsigned int* aux, unsigned int ini, unsigned
     }
 }
 
-static void merge_sort_rec(unsigned int* v, unsigned int* aux, unsigned int ini, unsigned int fim) {
+void merge_sort_rec(unsigned int* v, unsigned int* aux, unsigned int ini, unsigned int fim) {
     if (fim - ini < 2) return;
 
     unsigned int meio = (ini + fim) / 2;
