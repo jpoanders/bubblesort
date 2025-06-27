@@ -3,7 +3,6 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <unistd.h>
-extern int fd[2];
 #define DEFAULT_QUEUE_SIZE 16
 
 typedef struct {
@@ -72,24 +71,24 @@ int task_enqueue(task_queue_t* q, void (*function)(void*), void* arg) {
 task_t* task_dequeue(task_queue_t* q) {
     pthread_mutex_lock(&q->mutex);
     while (q->count == 0u && q->is_active) {
-        pthread_t tid = pthread_self(); // Pega o ID da thread atual
-        printf("Thread ID está esperando: %lu\n", (unsigned long)tid); // Conversão para exibição
-        fflush(stdout);
+        // pthread_t tid = pthread_self(); // Pega o ID da thread atual
+        // printf("Thread ID está esperando: %lu\n", (unsigned long)tid); // Conversão para exibição
+        // fflush(stdout);
         pthread_cond_wait(&q->task_avaiable, &q->mutex);
     }
     if (q->count == 0u && !q->is_active) {
         pthread_cond_broadcast(&q->task_avaiable);
-        printf("thread retornou null.\n");
-        fflush(stdout);
+        // printf("thread retornou null.\n");
+        // fflush(stdout);
         pthread_mutex_unlock(&q->mutex);
         return NULL;
     } 
     task_t* task = &q->contents[q->front];
     q->count--;
     q->front = (q->front + 1) % q->size;
-    pthread_t tid = pthread_self(); // Pega o ID da thread atual
-    printf("Thread ID pegou uma task: %lu\n", (unsigned long)tid); // Conversão para exibição
-    fflush(stdout);
+    // pthread_t tid = pthread_self(); // Pega o ID da thread atual
+    // printf("Thread ID pegou uma task: %lu\n", (unsigned long)tid);
+    // fflush(stdout);
     pthread_cond_broadcast(&q->task_avaiable);
     pthread_mutex_unlock(&q->mutex);
     return task;
@@ -101,6 +100,9 @@ void* pool_worker(void* args) {
     while (1) {
         task_t* task = task_dequeue(&pool->task_queue);
         if (task == NULL) break;
+        pthread_t tid = pthread_self(); // Pega o ID da thread atual
+        printf("Thread ID está processando uma task: %lu\n", (unsigned long)tid);
+        fflush(stdout);
         task->function(task->arg);
     }
     pthread_exit(NULL);
@@ -127,9 +129,12 @@ void thread_pool_destroy(thread_pool_t* pool) {
     // aguarda pela finalização das threads
     for (unsigned int i = 0u; i < pool->num_threads; i++) {
         pthread_join(pool->threads[i], NULL);
-        printf("thread %d finalizou\n", i);
+        printf("Uma thread finalizou.\n");
         fflush(stdout);
     }
+    printf("Todas as threads finalizaram.\n");
+    fflush(stdout);
+
     free(pool->threads);
     task_queue_destroy(&pool->task_queue);
 }
@@ -225,10 +230,9 @@ int sort_paralelo(unsigned int *vetor, unsigned int tam, unsigned int ntasks, un
     }  
     
     free(auxiliar_vector);
-    for (int i = 0; i < ntasks; i++) {
-        if (task_vector[i] == NULL) printf("tentando acessar vetor NULL");
-        imprime_vet((unsigned int *)task_vector[i], task_vector_size[i]);
-    }
+    // for (int i = 0; i < ntasks; i++) {
+    //     imprime_vet((unsigned int *)task_vector[i], task_vector_size[i]);
+    // }
     bubble_sort_args args[ntasks];
     thread_pool_t pool;
     thread_pool_init(&pool, nthreads, ntasks);
@@ -239,12 +243,10 @@ int sort_paralelo(unsigned int *vetor, unsigned int tam, unsigned int ntasks, un
         thread_pool_add_task(&pool, bubble_sort_wrapper, &args[i]);
     }
     thread_pool_destroy(&pool);
-    printf("destrui a pool.\n");
-    fflush(stdout);
 
-    for (int i = 0; i < ntasks; i++) {
-        imprime_vet((unsigned int *)task_vector[i], task_vector_size[i]);
-    }
+    // for (int i = 0; i < ntasks; i++) {
+    //     imprime_vet((unsigned int *)task_vector[i], task_vector_size[i]);
+    // }
     
         // concatena subvetores
     int pos = 0;
@@ -295,9 +297,6 @@ int main(int argc, char **argv) {
 
     // Imprime vetor ordenado
     imprime_vet(vetor, nnumbers);
-
-    // facilitar testes
-    write(fd[1], vetor, sizeof(int)*nnumbers);
 
     // Desaloca vetor
     free(vetor);
