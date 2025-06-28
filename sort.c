@@ -8,6 +8,7 @@
 typedef struct {
     void (*function)(void*);
     void* arg;
+    unsigned int id;
 } task_t;
 
 typedef struct {
@@ -15,6 +16,7 @@ typedef struct {
     int rear;
     unsigned int count;
     unsigned int size;
+    unsigned int total_enqueued;
     task_t* contents;
     pthread_mutex_t mutex;
     pthread_cond_t task_avaiable;
@@ -26,6 +28,12 @@ typedef struct {
     unsigned int num_threads;
     task_queue_t task_queue;
 } thread_pool_t;
+
+typedef struct {
+    int* vector;
+    int size;
+    int lower_bound, upper_bound;
+} bubble_sort_args;
 
 
 int task_queue_init(task_queue_t* q, unsigned int size);
@@ -43,12 +51,6 @@ void thread_pool_add_task(thread_pool_t* pool, void (*function)(void*), void* ar
 int thread_pool_init(thread_pool_t* pool, unsigned int nthreads, unsigned int q_size);
 
 void thread_pool_destroy(thread_pool_t* pool);
-
-typedef struct {
-    int* vector;
-    int size;
-    int lower_bound, upper_bound;
-} bubble_sort_args;
 
 // Funcao de ordenacao fornecida. Não pode alterar.
 void bubble_sort(int *v, int tam){
@@ -211,6 +213,7 @@ int task_queue_init(task_queue_t* q, unsigned int size) {
     q->rear = -1;
     q->count = 0u;
     q->size = size;
+    q->total_enqueued = 0u;
     unsigned int queue_size = (size) ? size : DEFAULT_QUEUE_SIZE;
     task_t* contents = malloc(sizeof(task_t)*queue_size);
     q->contents = contents;
@@ -233,7 +236,9 @@ int task_enqueue(task_queue_t* q, void (*function)(void*), void* arg) {
     q->rear = (q->rear + 1) % q->size;
     q->contents[q->rear].function = function;
     q->contents[q->rear].arg = arg;
+    q->contents[q->rear].id = q->total_enqueued;
     q->count++;
+    q->total_enqueued++;
     pthread_cond_broadcast(&q->task_avaiable);
     pthread_mutex_unlock(&q->mutex);
     return 0;
@@ -257,9 +262,6 @@ task_t* task_dequeue(task_queue_t* q) {
     task_t* task = &q->contents[q->front];
     q->count--;
     q->front = (q->front + 1) % q->size;
-    pthread_t tid = pthread_self(); // Pega o ID da thread atual
-    printf("Thread ID pegou uma task: %lu\n", (unsigned long)tid); // Conversão para exibição
-    fflush(stdout);
     pthread_cond_broadcast(&q->task_avaiable);
     pthread_mutex_unlock(&q->mutex);
     return task;
@@ -272,6 +274,9 @@ void* pool_worker(void* args) {
         task_t* task = task_dequeue(&pool->task_queue);
         if (task == NULL) break;
         task->function(task->arg);
+        pthread_t tid = pthread_self();
+        printf("Thread %lu pegou a task %u.\n", (unsigned long)tid, task->id);
+        fflush(stdout);
     }
     pthread_exit(NULL);
 }
@@ -282,13 +287,11 @@ void thread_pool_add_task(thread_pool_t* pool, void (*function)(void*), void* ar
 
 int thread_pool_init(thread_pool_t* pool, unsigned int nthreads, unsigned int q_size) {
     pool->threads = malloc(sizeof(pthread_t)*nthreads);
+    pool->num_threads = nthreads;
     task_queue_init(&pool->task_queue, q_size);
-
     for (unsigned int i = 0u; i < nthreads; i++) {
         if (pthread_create(&pool->threads[i], NULL, pool_worker, pool)) return 1;
     }
-
-    pool->num_threads = nthreads;
     return 0;
 }
 
