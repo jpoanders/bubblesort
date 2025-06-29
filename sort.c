@@ -24,9 +24,15 @@ typedef struct {
 } task_queue_t;
 
 typedef struct {
+    task_queue_t* task_queue;
+    unsigned int id;
+} thread_data;
+
+typedef struct {
     pthread_t* threads;
     unsigned int num_threads;
     task_queue_t task_queue;
+    thread_data* threads_data;
 } thread_pool_t;
 
 typedef struct {
@@ -247,9 +253,6 @@ int task_enqueue(task_queue_t* q, void (*function)(void*), void* arg) {
 task_t* task_dequeue(task_queue_t* q) {
     pthread_mutex_lock(&q->mutex);
     while (q->count == 0u && q->is_active) {
-        pthread_t tid = pthread_self(); // Pega o ID da thread atual
-        printf("Thread ID está esperando: %lu\n", (unsigned long)tid); // Conversão para exibição
-        fflush(stdout);
         pthread_cond_wait(&q->task_avaiable, &q->mutex);
     }
     if (q->count == 0u && !q->is_active) {
@@ -268,15 +271,14 @@ task_t* task_dequeue(task_queue_t* q) {
 }
 
 void* pool_worker(void* args) {
-    thread_pool_t* pool = (thread_pool_t*) args;
+    thread_data* data = (thread_data*) args;
 
     while (1) {
-        task_t* task = task_dequeue(&pool->task_queue);
+        task_t* task = task_dequeue(data->task_queue);
         if (task == NULL) break;
-        task->function(task->arg);
-        pthread_t tid = pthread_self();
-        printf("Thread %lu pegou a task %u.\n", (unsigned long)tid, task->id);
+        printf("Thread %u processando tarefa %u.\n", data->id, task->id);
         fflush(stdout);
+        task->function(task->arg);
     }
     pthread_exit(NULL);
 }
@@ -287,10 +289,13 @@ void thread_pool_add_task(thread_pool_t* pool, void (*function)(void*), void* ar
 
 int thread_pool_init(thread_pool_t* pool, unsigned int nthreads, unsigned int q_size) {
     pool->threads = malloc(sizeof(pthread_t)*nthreads);
+    pool->threads_data = malloc(sizeof(thread_data)*nthreads);
     pool->num_threads = nthreads;
     task_queue_init(&pool->task_queue, q_size);
     for (unsigned int i = 0u; i < nthreads; i++) {
-        if (pthread_create(&pool->threads[i], NULL, pool_worker, pool)) return 1;
+        pool->threads_data[i].id = i;
+        pool->threads_data[i].task_queue = &pool->task_queue;
+        if (pthread_create(&pool->threads[i], NULL, pool_worker, &pool->threads_data[i])) return 1;
     }
     return 0;
 }
@@ -302,10 +307,11 @@ void thread_pool_destroy(thread_pool_t* pool) {
     pthread_mutex_unlock(&pool->task_queue.mutex);
     for (unsigned int i = 0u; i < pool->num_threads; i++) {
         pthread_join(pool->threads[i], NULL);
-        printf("Uma Thread finalizou\n");
+        printf("Thread %u finalizou.\n", i);
         fflush(stdout);
     }
     printf("Todas as Threads finalizaram\n");
     free(pool->threads);
+    free(pool->threads_data);
     task_queue_destroy(&pool->task_queue);
 }
